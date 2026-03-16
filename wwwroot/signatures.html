@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assinaturas DocuSign Mock - ACME Corp</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        
+        body { font-family: "Inter", Arial, sans-serif; background-color: #f0f2f5; padding: 40px 20px; color: #333; margin:0;}
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); max-width: 1000px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e1e4e8; padding-bottom: 20px; margin-bottom: 30px; }
+        .header h2 { color: #004488; margin: 0; }
+        .back-link { color: #666; text-decoration: none; font-size: 14px; font-weight: 500; }
+        .back-link:hover { color: #004488; text-decoration: underline; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; color: #555; font-weight: 600; font-size: 13px; text-transform: uppercase; }
+        td { font-size: 14px; }
+        tr:hover { background: #fdfdfd; }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .badge.pending { background: #fff3cd; color: #856404; }
+        .badge.signed { background: #d4edda; color: #155724; }
+
+        .btn-action { background: #004488; border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; font-weight:bold; }
+        .btn-action:hover { background: #003366; }
+        .btn-action.disabled { background: #ccc; cursor: not-allowed; }
+        
+        .btn-download { background: #28a745; border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; font-weight:bold; text-decoration: none;}
+        .btn-download:hover { background: #218838; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>Fila de Assinaturas (DocuSign Integrator)</h2>
+        <a href="index.html" class="back-link">← Voltar</a>
+    </div>
+
+    <p style="color:#666; font-size:14px;">Abaixo estão os documentos que foram aprovados pelo setor Jurídico e requerem colheita de assinatura.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Título</th>
+                <th>Status da Assinatura</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody id="doc-list">
+            <tr><td colspan="4" style="text-align:center;">Carregando documentos...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+
+<script>
+    async function loadDocuments() {
+        try {
+            const res = await fetch('/api/documents');
+            const docs = await res.json();
+            const tbody = document.getElementById('doc-list');
+            
+            // Filter: Only Approved/FullySigned AND RequiresSignature
+            const sigDocs = docs.filter(d => 
+                (d.status === 'Approved' || d.status === 'FullySigned') && 
+                d.requiresSignature === true
+            );
+            
+            if (sigDocs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhum documento aguardando assinatura no momento.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            sigDocs.forEach(doc => {
+                const date = new Date(doc.createdAt).toLocaleString('pt-BR');
+                const isSigned = doc.status === 'FullySigned';
+                
+                const badge = isSigned 
+                    ? '<span class="badge signed">✓ Assinaturas Completas</span>' 
+                    : '<span class="badge pending">⏳ Aguardando Partes</span>';
+                
+                // Action Buttons
+                let actionBtn = '';
+                if (!isSigned) {
+                    actionBtn = `<button class="btn-action" onclick="simulateDocuSign('${doc.id}', '${doc.title}')">Forçar Assinatura (Simular Docusign API)</button>`;
+                } else {
+                    actionBtn = `<button class="btn-download" onclick="downloadSignedPdf('${doc.id}')">↓ Download PDF Final</button>`;
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${date}</td>
+                    <td><strong>${doc.title}</strong></td>
+                    <td>${badge}</td>
+                    <td>${actionBtn}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error(e);
+            document.getElementById('doc-list').innerHTML = '<tr><td colspan="4" style="color:red; text-align:center;">Erro ao carregar do servidor.</td></tr>';
+        }
+    }
+
+    async function simulateDocuSign(id, title) {
+        if(!confirm(`Deseja simular o disparado de webhook do DocuSign marcando o ofício '${title}' como assinado por todas as partes?`)) return;
+        
+        try {
+            const res = await fetch(`/api/documents/${id}/sign`, {
+                method: 'PUT'
+            });
+
+            if (res.ok) {
+                alert("Simulação Concluída. As partes assinaram o documento.");
+                loadDocuments(); // Refresh grid
+            } else {
+                alert("Erro ao aplicar assinatura no servidor.");
+            }
+        } catch(e) {
+            alert("Erro de conexão.");
+        }
+    }
+    
+    async function downloadSignedPdf(id) {
+        // Redirecionar a página para o endpoint GET que gera o PDF assinado usando PuppeteerSharp
+        window.location.href = `/api/documents/${id}/pdf`;
+    }
+
+    // Load instantly on page load
+    loadDocuments();
+</script>
+</body>
+</html>

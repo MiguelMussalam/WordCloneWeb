@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Documento - ACME Corp</title>
+    <!-- CKEditor 5 CDN (Document build) -->
+    <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/decoupled-document/ckeditor.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        
+        body { font-family: "Inter", Arial, sans-serif; background-color: #f0f2f5; padding: 40px 20px; display: flex; justify-content: center; margin: 0; color: #333; }
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); width: 100%; max-width: 900px; }
+        .header-title { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #e1e4e8; padding-bottom: 20px; margin-bottom: 30px; }
+        .header-title h2 { color: #004488; margin: 0; font-size: 24px; }
+        .back-link { color: #666; text-decoration: none; font-size: 14px; font-weight: 500; }
+        .back-link:hover { color: #004488; text-decoration: underline; }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+        .form-group input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; box-sizing: border-box; font-family: "Inter", sans-serif;}
+        
+        .checkbox-group { display: flex; align-items: center; gap: 10px; margin-top: 15px; margin-bottom: 25px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;}
+        .checkbox-group input { width: 18px; height: 18px; cursor: pointer; }
+        .checkbox-group label { margin: 0; cursor: pointer; font-weight: 500; }
+
+        #toolbar-container { border: 1px solid #ddd; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; background: #fafafa; }
+        .ck-editor__editable_inline { min-height: 500px; padding: 40px 50px !important; border: 1px solid #ddd !important; box-shadow: 0 4px 10px rgba(0,0,0,0.05); background: white; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; }
+        .ck-widget__resizer { display: block !important; }
+
+        .actions { margin-top: 30px; display: flex; gap: 15px; align-items: center; }
+        .btn { background-color: #004488; color: white; border: none; padding: 14px 28px; font-size: 16px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+        .btn:hover { background-color: #003366; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,68,136,0.3); }
+        .btn:disabled { background-color: #99badd; cursor: not-allowed; transform: none; box-shadow: none; }
+        .status { font-size: 14px; font-weight: 500; }
+        .spinner { display: none; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s ease-in-out infinite; margin-right: 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-title">
+        <h2>Módulo 1: Criação</h2>
+        <a href="index.html" class="back-link">← Voltar ao Início</a>
+    </div>
+    
+    <div id="draftNotice" style="display:none; background:#e8f4fd; border:1px solid #b8daff; color:#004085; padding:12px; border-radius:6px; margin-bottom:20px; font-size:14px; display:flex; justify-content:space-between; align-items:center;">
+        <span>📝 <strong>Rascunho Encontrado!</strong> Restauramos seu último trabalho não-salvo automaticamente.</span>
+        <button onclick="clearDraft()" style="background:transparent; border:1px solid #004085; color:#004085; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:12px;">Descartar Rascunho</button>
+    </div>
+
+    <!-- O Título agora é gerado automaticamente pelo servidor em formato Sequencial -->
+
+    <div class="form-group">
+        <label>Corpo do Texto (Sem cabeçalho/rodapé)</label>
+        <div id="toolbar-container"></div>
+        <div id="editor">
+            <h2>Assunto: </h2>
+            <p>Prezado(a),</p>
+            <p></p>
+            <br><p>Atenciosamente,</p>
+            <p><strong>Departamento</strong></p>
+        </div>
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="reqSignature" checked />
+        <label for="reqSignature">Este documento exigirá assinaturas formalizadas no rodapé (Integração DocuSign)</label>
+    </div>
+
+    <div class="actions">
+        <button class="btn" id="saveBtn" onclick="saveDocument()">
+            <div class="spinner" id="spinner"></div>
+            Salvar e Enviar para o Jurídico
+        </button>
+        <div class="status" id="statusMsg"></div>
+    </div>
+</div>
+
+<script>
+    let editorInstance;
+
+    class Base64UploadAdapter {
+        constructor(loader) { this.loader = loader; }
+        upload() {
+            return this.loader.file.then(file => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve({ default: reader.result });
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            }));
+        }
+        abort() {}
+    }
+
+    function Base64UploadAdapterPlugin(editor) {
+        editor.plugins.get('FileRepository').createUploadAdapter = (loader) => new Base64UploadAdapter(loader);
+    }
+
+    DecoupledEditor
+        .create(document.querySelector('#editor'), {
+            extraPlugins: [Base64UploadAdapterPlugin],
+            toolbar: [
+                'heading', '|', 'fontSize', 'fontFamily', '|',
+                'bold', 'italic', 'underline', 'strikethrough', '|',
+                'alignment', '|', 'bulletedList', 'numberedList', 'blockQuote', '|', 
+                'insertTable', 'link', 'uploadImage', '|', 'undo', 'redo' 
+            ],
+            image: {
+                resizeUnit: '%',
+                resizeOptions: [ { name: 'resizeImage:original', value: null, icon: 'original' }, { name: 'resizeImage:25', value: '25', icon: 'small' }, { name: 'resizeImage:50', value: '50', icon: 'medium' }, { name: 'resizeImage:75', value: '75', icon: 'large' } ],
+                toolbar: [ 'imageStyle:inline', 'imageStyle:block', 'imageStyle:side', '|', 'toggleImageCaption', 'imageTextAlternative', '|', 'resizeImage' ]
+            }
+        })
+        .then(editor => {
+            editorInstance = editor;
+            document.querySelector('#toolbar-container').appendChild(editor.ui.view.toolbar.element);
+            
+            // --- Auto-Save Draft Logic ---
+            const savedDraft = localStorage.getItem('acmeDocumentDraft');
+            if (savedDraft) {
+                editor.setData(savedDraft);
+                document.getElementById('draftNotice').style.display = 'flex';
+            } else {
+                document.getElementById('draftNotice').style.display = 'none';
+            }
+
+            editor.model.document.on('change:data', () => {
+                const currentData = editor.getData();
+                localStorage.setItem('acmeDocumentDraft', currentData);
+            });
+            // -----------------------------
+        })
+        .catch(error => console.error(error));
+
+    function clearDraft() {
+        if(!confirm('Tem certeza? Todo o texto digitado será apagado.')) return;
+        localStorage.removeItem('acmeDocumentDraft');
+        editorInstance.setData('');
+        document.getElementById('draftNotice').style.display = 'none';
+    }
+
+    async function saveDocument() {
+        if (!editorInstance) return;
+        
+        const htmlContent = editorInstance.getData();
+        const reqSig = document.getElementById('reqSignature').checked;
+        const btn = document.getElementById('saveBtn');
+        const spinner = document.getElementById('spinner');
+        const status = document.getElementById('statusMsg');
+
+        if (!htmlContent.trim()) {
+            alert("O conteúdo não pode estar vazio.");
+            return;
+        }
+
+        btn.disabled = true;
+        spinner.style.display = 'block';
+        status.innerText = "Salvando documento no sistema...";
+        status.style.color = "#004488";
+
+        try {
+            const response = await fetch('/api/documents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ htmlContent: htmlContent, requiresSignature: reqSig })
+            });
+
+            if (response.ok) {
+                // Clear the auto-save draft safely since it's already in the server
+                localStorage.removeItem('acmeDocumentDraft');
+
+                status.innerText = "✓ Documento protocolado com sucesso e enviado para a fila Jurídica!";
+                status.style.color = "#008a00";
+                setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+            } else {
+                status.innerText = "Erro ao salvar.";
+                status.style.color = "red";
+            }
+        } catch (err) {
+            status.innerText = "Erro de conexão com o servidor.";
+            status.style.color = "red";
+        } finally {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+        }
+    }
+</script>
+</body>
+</html>

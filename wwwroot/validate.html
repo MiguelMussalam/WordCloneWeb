@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validação Jurídica - ACME Corp</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        
+        body { font-family: "Inter", Arial, sans-serif; background-color: #f0f2f5; padding: 40px 20px; color: #333; margin:0;}
+        .container { background-color: white; padding: 40px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); max-width: 1000px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e1e4e8; padding-bottom: 20px; margin-bottom: 30px; }
+        .header h2 { color: #004488; margin: 0; }
+        .back-link { color: #666; text-decoration: none; font-size: 14px; font-weight: 500; }
+        .back-link:hover { color: #004488; text-decoration: underline; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; color: #555; font-weight: 600; font-size: 13px; text-transform: uppercase; }
+        td { font-size: 14px; }
+        tr:hover { background: #fdfdfd; }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background: #fff3cd; color: #856404; }
+        .badge.signature { background: #cce5ff; color: #004085; }
+
+        .btn-view { background: transparent; border: 1px solid #004488; color: #004488; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; }
+        .btn-view:hover { background: #004488; color: white; }
+
+        /* Modal Settings */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100;}
+        .modal { background: white; width: 90%; max-width: 800px; max-height: 90vh; border-radius: 8px; padding: 30px; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;  padding-bottom:10px; border-bottom: 1px solid #eee;}
+        .modal-body { overflow-y: auto; flex-grow: 1; padding: 20px; background: #fafafa; border: 1px solid #eee; border-radius: 4px; margin-bottom: 20px;}
+        .modal-footer { display: flex; gap: 15px; justify-content: flex-end; }
+        
+        /* Modal Content format similar to A4 */
+        .preview-doc { width: 100%; height: 75vh; border: none; }
+
+        .btn-approve { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;}
+        .btn-reject { background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;}
+        .btn-close { background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h2>Fila de Análise - Jurídico</h2>
+        <a href="index.html" class="back-link">← Voltar</a>
+    </div>
+
+    <p style="color:#666; font-size:14px;">Documentos aguardando parecer do setor jurídico antes de seguir para fila de assinaturas.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Título</th>
+                <th>Status</th>
+                <th>Requer Assinatura</th>
+                <th>Ação</th>
+            </tr>
+        </thead>
+        <tbody id="doc-list">
+            <tr><td colspan="5" style="text-align:center;">Carregando documentos...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal Document Preview -->
+<div class="modal-overlay" id="docModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modalTitle" style="margin:0;">Visualização do Documento</h3>
+            <button onclick="closeModal()" style="background:none; border:none; font-size:20px; cursor:pointer;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding:0; overflow:hidden;">
+            <!-- Usando iframe para isolar o CSS do template corporativo do CSS do painel -->
+            <iframe class="preview-doc" id="modalContent"></iframe>
+        </div>
+        <div class="modal-footer" id="modalActions">
+            <button class="btn-close" onclick="closeModal()">Cancelar</button>
+            <button class="btn-reject" onclick="rejectDocument()">Reprovar Documento</button>
+            <button class="btn-approve" onclick="approveDocument()">Aprovar Documento</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentDocId = null;
+
+    async function loadDocuments() {
+        try {
+            const res = await fetch('/api/documents');
+            const docs = await res.json();
+            const tbody = document.getElementById('doc-list');
+            
+            // Filter only pending documents for this screen
+            const pendingDocs = docs.filter(d => d.status === 'PendingValidation');
+            
+            if (pendingDocs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Nenhum documento pendente de validação jurídica.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            pendingDocs.forEach(doc => {
+                const date = new Date(doc.createdAt).toLocaleString('pt-BR');
+                const sigBadge = doc.requiresSignature ? '<span class="badge signature">Sim (DocuSign)</span>' : '<span style="color:#999;font-size:12px;">Não</span>';
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${date}</td>
+                    <td><strong>${doc.title}</strong></td>
+                    <td><span class="badge">Aguardando Avaliação</span></td>
+                    <td>${sigBadge}</td>
+                    <td><button class="btn-view" onclick="openModal('${doc.id}')">Ler & Avaliar</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error(e);
+            document.getElementById('doc-list').innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Erro ao carregar do servidor.</td></tr>';
+        }
+    }
+
+    async function openModal(id) {
+        currentDocId = id;
+        try {
+            const res = await fetch(`/api/documents/${id}`);
+            const doc = await res.json();
+            
+            document.getElementById('modalTitle').innerText = "Análise: " + doc.title;
+            
+            // Inject the fully wrapped Corporate Template into the iframe
+            const iframe = document.getElementById('modalContent');
+            iframe.srcdoc = doc.wrappedHtmlContent;
+            
+            // Show modal
+            document.getElementById('docModal').style.display = 'flex';
+        } catch(e) {
+            alert('Falha ao carregar conteúdo do documento.');
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('docModal').style.display = 'none';
+        currentDocId = null;
+    }
+
+    async function approveDocument() {
+        if(!confirm("Tem certeza que deseja aprovar este documento? Ele seguirá para a fila de assinaturas.")) return;
+        await processValidation(true, null);
+    }
+
+    async function rejectDocument() {
+        const comment = prompt("Motivo da reprovação (ressalvas jurídicas):");
+        if (comment === null) return; // User cancelled prompt
+        if (comment.trim() === "") {
+            alert("É obrigatório informar o motivo da reprovação.");
+            return;
+        }
+        await processValidation(false, comment);
+    }
+
+    async function processValidation(approved, comment) {
+        if (!currentDocId) return;
+        
+        try {
+            const res = await fetch(`/api/documents/${currentDocId}/validate`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ approved: approved, comment: comment })
+            });
+
+            if (res.ok) {
+                alert(approved ? "Documento Aprovado com Sucesso" : "Documento Reprovado e Retornado.");
+                closeModal();
+                loadDocuments(); // Refresh grid
+            } else {
+                alert("Erro ao validar documento no servidor.");
+            }
+        } catch(e) {
+            alert("Erro de conexão.");
+        }
+    }
+
+    // Load instantly on page load
+    loadDocuments();
+</script>
+</body>
+</html>
